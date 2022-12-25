@@ -1,4 +1,5 @@
 #pragma region Includes
+#include <random>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
@@ -20,6 +21,16 @@ const unsigned int SCR_HEIGHT = 800;
 const int mWidth = 9;
 const int mHeight = 16;
 const int totalCell = mWidth * mHeight;
+vec3 cameraPos = vec3(4.5f, 8, 0);
+const double tickTime = 1.f;
+
+#pragma region Random
+
+random_device dev;
+mt19937 rng(dev());
+uniform_int_distribution<std::mt19937::result_type> dist7(0, 7);
+
+#pragma endregion
 
 #pragma endregion
 
@@ -62,7 +73,6 @@ struct Transform {
     Transform() : position(Vec2Int()), rotation(0) {}
 };
 
-
 struct Color { 
     float data[3];
 
@@ -104,12 +114,10 @@ struct Block {
 struct Tetromino {
     Transform transform;
     Block* block;
-    Color* color;
 
-    Tetromino(Transform trans, Block* b, Color* c) {
+    Tetromino(Transform trans, Block* b) {
         transform = trans;
         block = b;
-        color = c;
     }
 };
 
@@ -196,81 +204,6 @@ Block blocks[] =
     }, &color_purple)
 };
 
-//int block[7][8] =
-//{
-//    { // Block I
-//        1,  2,
-//        1,  1,
-//        1,  0,
-//        1, -1
-//    },
-//    { // Block L1
-//        1, 2,
-//        1, 1,
-//        1, 0,
-//        0, 0
-//    },
-//    { // Block L2
-//        0, 2,
-//        0, 1,
-//        0, 0,
-//        1, 0
-//    },
-//    { // Block O
-//        0, 1,
-//        1, 1,
-//        0, 0,
-//        1, 0
-//    },
-//    { // Block Z1
-//        1, 2,
-//        1, 1,
-//        0, 1,
-//        0, 0
-//    },
-//    { // Block Z2
-//        0, 2,
-//        0, 1,
-//        1, 1,
-//        1, 0
-//    },
-//    { // Block T
-//        0, 2,
-//        0, 1,
-//        1, 1,
-//        0, 0
-//    },
-//};
-
-vec3 cameraPos = vec3(4.5f, 8, 0);
-
-#pragma endregion
-
-#pragma region Declaration
-
-// Input
-void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void processInput();
-void proccessTrackKeyInput();
-bool IsKeyDown(int key);
-bool IsKeyUp(int key);
-// ================================================================
-
-template <size_t n_vert, size_t n_index>
-void binding(float(&vertices)[n_vert], unsigned int(&indices)[n_index]);
-void clearColor(Color& color);
-
-void ClearTetromino(Tetromino* tetro);
-void DrawTetromino(Tetromino* tetro);
-
-Vec2Int ApplyRotate(Vec2Int pos, int rot);
-bool ValidTransform(Vec2Int pos, int rot);
-
-#pragma endregion
-
-#pragma region Working var
-
-GLFWwindow* window;
 map<int, int> track_key_state = {
     { GLFW_KEY_UP, GLFW_RELEASE },
     { GLFW_KEY_DOWN, GLFW_RELEASE},
@@ -280,16 +213,49 @@ map<int, int> track_key_state = {
     { GLFW_KEY_W, GLFW_RELEASE }
 };
 
-float* cell[totalCell];
-int cb_id = 6;
-int cb_rot = 0;
-Vec2Int cb_pos = Vec2Int(3, 4);
+#pragma endregion
 
+#pragma region Declaration
+
+// Input
+void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+void processInput();
+void updateTrackKeyInput();
+bool IsKeyDown(int key);
+bool IsKeyUp(int key);
+
+// Render
+template <size_t n_vert, size_t n_index>
+void binding(float(&vertices)[n_vert], unsigned int(&indices)[n_index]);
+void clearColor(Color& color);
+
+// Core Game
+void ProcessPlayerControl();
+void TickDown();
+void Update();
+void OnLanded();
+
+// Tetromino
+void ClearTetromino(Tetromino* tetro);
+void DrawTetromino(Tetromino* tetro);
+bool CheckTetrominoTransform(Tetromino* tetro);
+
+// Utilities
+Vec2Int ApplyRotate(Vec2Int pos, int rot);
+
+#pragma endregion
+
+#pragma region Working var
+
+GLFWwindow* window;
+double passTickTime = 0;
+const Vec2Int startPos = Vec2Int(mWidth / 2, mHeight);
+float* cell[totalCell];
 int cTetroId = 3;
+Transform oldTrans;
 Tetromino cTetro = Tetromino(
     Transform(Vec2Int(3, 4), 0),
-    &blocks[cTetroId],
-    &color_orange
+    &blocks[cTetroId]
 );
 
 #pragma endregion
@@ -394,32 +360,31 @@ int main()
     unsigned int transformLoc = glGetUniformLocation(shaderProgram, "transform");
     unsigned int colorLoc = glGetUniformLocation(shaderProgram, "tint");
 
+    for (int i = 0; i < totalCell; i++)
+        cell[i] = color_grey.data;
+
 #pragma endregion
 
 #pragma endregion
 
 #pragma region Core Loop
 
-    for (int i = 0; i < totalCell; i++)
-        cell[i] = color_grey.data;
-
-
     // Game loop
     while (!glfwWindowShouldClose(window))
     {
         ClearTetromino(&cTetro);
 
-        // input
         processInput();
-        proccessTrackKeyInput();
+        Update();
+        updateTrackKeyInput();
+
+        DrawTetromino(&cTetro);
 
         // render
         #pragma region Render
 
         clearColor(color_white);
         glClear(GL_COLOR_BUFFER_BIT);
-
-        DrawTetromino(&cTetro);
 
         // Border
         {
@@ -447,8 +412,8 @@ int main()
         }
 
         #pragma endregion
+
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
-        // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
@@ -472,46 +437,24 @@ int main()
 
 #pragma region Implementation
 
+#pragma region Input
+
+// glfw: whenever the window size changed (by OS or user resize) this callback function executes
+void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+{
+    // make sure the viewport matches the new window dimensions; note that width and 
+    // height will be significantly larger than specified on retina displays.
+    glViewport(0, 0, width, height);
+}
+
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
-// ---------------------------------------------------------------------------------------------------------
 void processInput()
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
-
-    if (IsKeyDown(GLFW_KEY_E))
-    {
-        cTetroId = (cTetroId + 1) % 7;
-        cTetro.block = &blocks[cTetroId];
-    }
-
-    Transform oldTrans = cTetro.transform;
-    Vec2Int oldPos = cb_pos;
-    int oldRot = cb_rot;
-
-    if (IsKeyDown(GLFW_KEY_W))
-        cTetro.transform.rotation = (cTetro.transform.rotation + 1) % 4;
-
-    if (IsKeyDown(GLFW_KEY_LEFT))
-        cTetro.transform.position.x -= 1;
-
-    if (IsKeyDown(GLFW_KEY_RIGHT))
-        cTetro.transform.position.x += 1;
-
-    if (IsKeyDown(GLFW_KEY_DOWN))
-        cTetro.transform.position.y -= 1;
-
-    if (IsKeyDown(GLFW_KEY_UP))
-        cTetro.transform.position.y += 1;
-
-    if (!ValidTransform(cb_pos, cb_rot))
-    {
-        cb_pos = oldPos;
-        cb_rot = oldRot;
-    }
 }
 
-void proccessTrackKeyInput()
+void updateTrackKeyInput()
 {
     for (map<int, int>::iterator i = track_key_state.begin(); i != track_key_state.end(); i++)
         i->second = glfwGetKey(window, i->first);
@@ -526,14 +469,9 @@ bool IsKeyUp(int key)
     return track_key_state[key] == GLFW_PRESS && glfwGetKey(window, key) == GLFW_RELEASE;
 }
 
-// glfw: whenever the window size changed (by OS or user resize) this callback function executes
-// ---------------------------------------------------------------------------------------------
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
-    // make sure the viewport matches the new window dimensions; note that width and 
-    // height will be significantly larger than specified on retina displays.
-    glViewport(0, 0, width, height);
-}
+#pragma endregion
+
+#pragma region Render
 
 template <size_t n_vert, size_t n_index>
 void binding(float(&vertices)[n_vert], unsigned int(&indices)[n_index])
@@ -566,6 +504,98 @@ void clearColor(Color& color)
     glClearColor(color.data[0], color.data[1], color.data[2], 1.0);
 }
 
+#pragma endregion
+
+#pragma region Core Game
+
+void Update()
+{
+    ProcessPlayerControl();
+    TickDown();
+}
+
+void ProcessPlayerControl()
+{
+    oldTrans = cTetro.transform;
+
+    if (IsKeyDown(GLFW_KEY_E))
+    {
+        cTetroId = (cTetroId + 1) % 7;
+        cTetro.block = &blocks[cTetroId];
+    }
+
+    if (IsKeyDown(GLFW_KEY_W))
+        cTetro.transform.rotation = (cTetro.transform.rotation + 1) % 4;
+
+    if (IsKeyDown(GLFW_KEY_LEFT))
+        cTetro.transform.position.x -= 1;
+
+    if (IsKeyDown(GLFW_KEY_RIGHT))
+        cTetro.transform.position.x += 1;
+
+    if (IsKeyDown(GLFW_KEY_DOWN))
+        cTetro.transform.position.y -= 1;
+
+    if (IsKeyDown(GLFW_KEY_UP))
+        cTetro.transform.position.y += 1;
+
+    if (!CheckTetrominoTransform(&cTetro))
+        cTetro.transform = oldTrans;
+}
+
+
+void TickDown()
+{
+    while (passTickTime + tickTime < glfwGetTime())
+    {
+        passTickTime += tickTime;
+
+        oldTrans = cTetro.transform;
+
+        cTetro.transform.position.y -= 1;
+
+        if (!CheckTetrominoTransform(&cTetro))
+        {
+            cTetro.transform = oldTrans;
+            OnLanded();
+        }
+    }
+}
+
+void OnLanded()
+{
+    DrawTetromino(&cTetro);
+    cTetro.block = &blocks[dist7(rng)];
+    cTetro.transform.position = startPos;
+    cTetro.transform.rotation = 0;
+}
+
+#pragma endregion
+
+#pragma region Tetromino
+
+bool CheckTetrominoTransform(Tetromino* tetro)
+{
+    for (int i = 0; i < 4; i++)
+    {
+        Vec2Int local_pos = tetro->block->data[i];
+        local_pos = ApplyRotate(local_pos, tetro->transform.rotation);
+        int px = tetro->transform.position.x + local_pos.x;
+        int py = tetro->transform.position.y + local_pos.y;
+        if (0 <= px && px < mWidth && 0 <= py && py < mHeight)
+        {
+            if (cell[py * mWidth + px] != color_grey.data)
+                return false;
+        }
+        else {
+            if (px < 0 || px >= mWidth || py < 0)
+                return false;
+        }
+    }
+
+    return true;
+}
+
 void ClearTetromino(Tetromino* tetro)
 {
     for (int i = 0; i < 4; i++)
@@ -594,6 +624,10 @@ void DrawTetromino(Tetromino* tetro)
     }
 }
 
+#pragma endregion
+
+#pragma region Utilities
+
 Vec2Int ApplyRotate(Vec2Int pos, int rot)
 {
     int t = pos.x;
@@ -616,20 +650,7 @@ Vec2Int ApplyRotate(Vec2Int pos, int rot)
     return pos;
 }
 
-bool ValidTransform(Vec2Int pos, int rot)
-{
-    //for (int i = 0; i < 4; i++)
-    //{
-    //    Vec2Int local_pos = block[cb_id][2 * i], block[cb_id][2 * i + 1]);
-    //    local_pos = ApplyRotate(local_pos, rot);
-    //    int px = pos.x + local_pos.x;
-    //    int py = pos.y + local_pos.y;
-    //    if (px < 0 || px >= mWidth || py < 0 || py >= mHeight || cell[py * mWidth + px] != color_grey.data)
-    //        return false;
-    //}
-
-    return true;
-}
+#pragma endregion
 
 #pragma endregion
 
