@@ -1,0 +1,13 @@
+Flower.vcxproj
+Flower.vcxproj.filters
+x64/Debug/Flower.exe.recipe
+x64/Debug/main.obj.enc
+x64/Debug/vc142.idb
+x64/Debug/Flower.tlog/CL.command.1.tlog
+x64/Debug/Flower.tlog/CL.read.1.tlog
+x64/Debug/Flower.tlog/CL.write.1.tlog
+x64/Debug/Flower.tlog/Flower.lastbuildstate
+x64/Debug/Flower.tlog/link.command.1.tlog
+x64/Debug/Flower.tlog/link.read.1.tlog
+x64/Debug/Flower.tlog/link.write.1.tlog
+flower.cpp
