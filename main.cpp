@@ -7,6 +7,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <map>
+#include <vector>
 
 using namespace std;
 using namespace glm;
@@ -234,6 +235,7 @@ void ProcessPlayerControl();
 void TickDown();
 void Update();
 void OnLanded();
+void CheckClearTetromino();
 
 // Tetromino
 void ClearTetromino(Tetromino* tetro);
@@ -257,6 +259,7 @@ Tetromino cTetro = Tetromino(
     Transform(Vec2Int(3, 4), 0),
     &blocks[cTetroId]
 );
+vector<int> scanLines;
 
 #pragma endregion
 
@@ -568,6 +571,47 @@ void OnLanded()
     cTetro.block = &blocks[dist7(rng)];
     cTetro.transform.position = startPos;
     cTetro.transform.rotation = 0;
+}
+
+void CheckClearTetromino()
+{
+    int countFill = 0;
+    int stopLine = 0;
+    for (int y = 0; y < mHeight; y++)
+    {
+        countFill = 0;
+        for (int x = 0; x < mWidth; x++)
+            if (cell[y * mWidth + x] == color_grey.data)
+                countFill++;
+
+        if (countFill == mWidth)
+        {
+            stopLine = y;
+            break;
+        }
+
+        if (countFill == 0)
+            scanLines.push_back(y);
+    }
+
+
+    int sLineIndex = 0;
+    for (int y = 0; y < stopLine; y++)
+    {
+        if (sLineIndex > 0)
+            for (int x = 0; x < mWidth; x++)
+                cell[y * mWidth + x] == cell[(y + sLineIndex) * mWidth + x];
+
+        if (y + 1 == scanLines[sLineIndex])
+            sLineIndex++;
+    }
+
+    for (int i = 0; i < scanLines.size(); i++)
+    {
+        for (int x = 0; x < mWidth; x++)
+            cell[scanLines[i] * mWidth + x] == cell[(scanLines[i] + i + 1) * mWidth + x];
+    }
+    scanLines.clear();
 }
 
 #pragma endregion
