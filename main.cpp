@@ -23,7 +23,7 @@ const int mWidth = 9;
 const int mHeight = 16;
 const int totalCell = mWidth * mHeight;
 vec3 cameraPos = vec3(4.5f, 8, 0);
-const double tickTime = 1.f;
+const double tickTime = 0.25f;
 
 #pragma region Random
 
@@ -145,12 +145,12 @@ Color color_white = Color(255, 255, 255);
 Color color_grey = Color(225, 225, 225);
 Color color_dgrey = Color(128, 128, 128);
 Color color_cyan = Color(0, 183, 235);
-Color color_blue = Color(0, 0, 255);
-Color color_orange = Color(255, 128, 0);
-Color color_yellow = Color(255, 255, 0);
-Color color_green = Color(0, 255, 0);
-Color color_purple = Color(255, 0, 255);
-Color color_red = Color(255, 0, 0);
+Color color_blue = Color(0, 128, 255);
+Color color_orange = Color(255, 155, 51);
+Color color_yellow = Color(255, 255, 102);
+Color color_green = Color(102, 255, 102);
+Color color_purple = Color(178, 102, 255);
+Color color_red = Color(255, 51, 51);
 
 Block blocks[] =
 {
@@ -494,9 +494,6 @@ void binding(float(&vertices)[n_vert], unsigned int(&indices)[n_index])
     // position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    // color attribute
-    // glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-    // glEnableVertexAttribArray(1);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
@@ -568,6 +565,7 @@ void TickDown()
 void OnLanded()
 {
     DrawTetromino(&cTetro);
+    CheckClearTetromino();
     cTetro.block = &blocks[dist7(rng)];
     cTetro.transform.position = startPos;
     cTetro.transform.rotation = 0;
@@ -575,42 +573,44 @@ void OnLanded()
 
 void CheckClearTetromino()
 {
-    int countFill = 0;
+    int countEmpty = 0;
     int stopLine = 0;
     for (int y = 0; y < mHeight; y++)
     {
-        countFill = 0;
+        countEmpty = 0;
         for (int x = 0; x < mWidth; x++)
             if (cell[y * mWidth + x] == color_grey.data)
-                countFill++;
-
-        if (countFill == mWidth)
+                countEmpty++;
+        
+        cout << "Count Empty " << countEmpty << " of " << y << endl;
+        if (countEmpty == mWidth)
         {
-            stopLine = y;
+            stopLine = y + 1;
             break;
         }
 
-        if (countFill == 0)
+        if (countEmpty == 0)
             scanLines.push_back(y);
     }
 
+    cout << stopLine << endl;
 
     int sLineIndex = 0;
     for (int y = 0; y < stopLine; y++)
     {
+        while (sLineIndex < scanLines.size())
+        {
+            if (y + sLineIndex != scanLines[sLineIndex]) 
+                break;
+        
+            sLineIndex++;
+        }
+
         if (sLineIndex > 0)
             for (int x = 0; x < mWidth; x++)
-                cell[y * mWidth + x] == cell[(y + sLineIndex) * mWidth + x];
-
-        if (y + 1 == scanLines[sLineIndex])
-            sLineIndex++;
+                cell[y * mWidth + x] = cell[(y + sLineIndex) * mWidth + x];
     }
 
-    for (int i = 0; i < scanLines.size(); i++)
-    {
-        for (int x = 0; x < mWidth; x++)
-            cell[scanLines[i] * mWidth + x] == cell[(scanLines[i] + i + 1) * mWidth + x];
-    }
     scanLines.clear();
 }
 
