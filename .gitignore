@@ -11,3 +11,7 @@ x64/Debug/Flower.tlog/link.command.1.tlog
 x64/Debug/Flower.tlog/link.read.1.tlog
 x64/Debug/Flower.tlog/link.write.1.tlog
 flower.cpp
+
+*.o
+app
+glad.c
