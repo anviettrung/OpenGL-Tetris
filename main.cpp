@@ -1,18 +1,16 @@
-#pragma region Includes
-#include <glad/glad.h>
-#include <GLFW/glfw3.h>
 #include <iostream>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <map>
 #include <vector>
 #include <random>
 
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 using namespace std;
 using namespace glm;
-
-#pragma endregion
 
 #pragma region Settings
 
@@ -21,22 +19,12 @@ const unsigned int SCR_HEIGHT = 800;
 
 const int w = 9;
 const int h = 16;
-const int totalCell = w * h;
-const double tickTime = 1;
-
-#pragma region Random
-
-random_device dev;
-mt19937 rng(dev());
-uniform_int_distribution<std::mt19937::result_type> dist7(0, 7);
+const double tick = 1;
 
 #pragma endregion
 
-#pragma endregion
-
-// Tham khảo của Trung
+// Tham khảo Shader của An Việt Trung
 #pragma region Shader
-
 const char* vertexShaderSource = "#version 330 core\n"
 "layout (location = 0) in vec3 aPos;\n"
 "uniform vec3 tint;\n"
@@ -55,75 +43,9 @@ const char* fragmentShaderSource = "#version 330 core\n"
 "{\n"
 "   FragColor = vec4(ourColor, 1.0f);\n"
 "}\n\0";
-
 #pragma endregion
 
 #pragma region Asset
-
-Color color_black = Color(0, 0, 0);
-Color color_white = Color(255, 255, 255);
-Color color_grey = Color(225, 225, 225);
-Color color_dgrey = Color(128, 128, 128);
-Color color_cyan = Color(0, 183, 235);
-Color color_blue = Color(0, 128, 255);
-Color color_orange = Color(255, 155, 51);
-Color color_yellow = Color(255, 255, 102);
-Color color_green = Color(102, 255, 102);
-Color color_purple = Color(178, 102, 255);
-Color color_red = Color(255, 51, 51);
-
-Block blocks[] =
-{
-    // Block I
-    Block(new int[]{
-        1,  2,
-        1,  1,
-        1,  0,
-        1, -1
-    }, &color_cyan),
-    // Block L1
-    Block(new int[] {
-        1, 2,
-        1, 1,
-        1, 0,
-        0, 0
-    }, &color_blue),
-    // Block L2
-    Block(new int[] {
-        0, 2,
-        0, 1,
-        0, 0,
-        1, 0
-    }, &color_orange),
-    // Block O
-    Block(new int[] {
-        0, 1,
-        1, 1,
-        0, 0,
-        1, 0
-    }, &color_yellow),
-    // Block Z1
-    Block(new int[] {
-        1, 2,
-        1, 1,
-        0, 1,
-        0, 0
-    }, &color_green),
-    // Block Z2
-    Block(new int[] {
-        0, 2,
-        0, 1,
-        1, 1,
-        1, 0
-    }, &color_red),
-    // Block T
-    Block(new int[] {
-        0, 2,
-        0, 1,
-        1, 1,
-        0, 0
-    }, &color_purple)
-};
 
 map<int, int> track_key_state = {
     { GLFW_KEY_UP, GLFW_RELEASE },
@@ -132,6 +54,33 @@ map<int, int> track_key_state = {
     { GLFW_KEY_RIGHT, GLFW_RELEASE },
     { GLFW_KEY_E, GLFW_RELEASE },
     { GLFW_KEY_W, GLFW_RELEASE }
+};
+
+// Danh sách màu
+float color_background[] = {  87, 155, 177 };
+float color_cell_empty[] = { 225, 215, 198 };
+float color_begie[] = { 251, 194, 82 };
+float color_sage[] = { 163, 187, 152 };
+
+float* colors[] = {
+    color_cell_empty,
+    color_begie,
+    color_sage
+};
+
+int blocks[7][4][4] = {
+    {
+        { 2, 6, 10, 14 },
+        { 8, 9, 10, 11 },
+        { 1, 5, 9, 13 },
+        { 4, 5, 6, 7 }
+    },
+    {
+        { 5, 6, 9, 10 },
+        { 5, 6, 9, 10 },
+        { 5, 6, 9, 10 },
+        { 5, 6, 9, 10 }
+    }
 };
 
 #pragma endregion
@@ -145,41 +94,39 @@ void updateTrackKeyInput();
 bool IsKeyDown(int key);
 bool IsKeyUp(int key);
 
-// Render
-template <size_t n_vert, size_t n_index>
-void binding(float(&vertices)[n_vert], unsigned int(&indices)[n_index]);
-void clearColor(Color& color);
-
 // Core Game
-void ProcessPlayerControl();
-void TickDown();
+void Control();
 void Update();
-void OnLanded();
-void CheckClearTetromino();
 
-// Tetromino
-void ClearTetromino(Tetromino* tetro);
-void DrawTetromino(Tetromino* tetro);
-bool CheckTetrominoTransform(Tetromino* tetro);
+void InitBrick();
+void Fall();
+void StopBrick();
+void DeleteRow();
 
-// Utilities
-Vec2Int ApplyRotate(Vec2Int pos, int rot);
+bool Check(int x, int y, int block_id, int quay_id);
+void Draw(int x, int y, int block_id, int quay_id, int color_id);
+
+void CopyBrick();
+void Apply();
 
 #pragma endregion
 
-#pragma region Working var
+#pragma region Global Variables
 
 GLFWwindow* window;
 double passTickTime = 0;
-const Vec2Int startPos = Vec2Int(w / 2, h);
+
 int matrix[w][h];
-int cTetroId = 3;
-Transform oldTrans;
-Tetromino cTetro = Tetromino(
-    Transform(Vec2Int(3, 4), 0),
-    &blocks[cTetroId]
-);
-vector<int> scanLines;
+
+int BLOCK = 0;
+int X = 0;
+int Y = 0;
+int quay = 0;
+
+int m_BLOCK = BLOCK;
+int m_X = X;
+int m_Y = Y;
+int m_quay = quay;
 
 #pragma endregion
 
@@ -315,48 +262,39 @@ int main()
     unsigned int transformLoc = glGetUniformLocation(shaderProgram, "transform");
     unsigned int colorLoc = glGetUniformLocation(shaderProgram, "tint");
 
-    for (int i = 0; i < totalCell; i++)
-        matrix[i] = color_grey.data;
-
 #pragma endregion
 
 #pragma region Core Loop
 
+    InitBrick();
+
     // Game loop
     while (!glfwWindowShouldClose(window))
     {
-        ClearTetromino(&cTetro);
-
         processInput();
         Update();
         updateTrackKeyInput();
 
-        DrawTetromino(&cTetro);
-
-        // render
         #pragma region Render
 
-        clearColor(color_white);
+        glClearColor(color_background[0] / 255, color_background[1] / 255, color_background[2] / 255, 1);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        // Cells
-        for (int i = 0; i < totalCell; i++)
+        for (int x = 0; x < w; x++)
         {
-            int pos_x = i % w;
-            int pos_y = i / w;
-
-            mat4 trans = mat4(1.0f);
-            trans = scale(trans, vec3(1.0f) * 0.1f);
-            trans = translate(trans, 1.1f * vec3(pos_x, pos_y, 0) - vec3(4.5, 8, 0));
-
-            glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
-            glUniform3fv(colorLoc, 1, matrix[i]);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            for (int y = 0; y < h; y++)
+            {
+                mat4 trans = mat4(1.0f);
+                trans = scale(trans, vec3(1.0f) * 0.1f);
+                trans = translate(trans, 1.1f * vec3(x, y, 0) - vec3(4.5, 8, 0));
+                glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
+                glUniform3fv(colorLoc, 1, colors[matrix[x][y]]);
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            }
         }
 
         #pragma endregion
 
-        // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
@@ -369,8 +307,6 @@ int main()
     glDeleteBuffers(1, &VBO);
     glDeleteProgram(shaderProgram);
 
-    // glfw: terminate, clearing all previously allocated GLFW resources.
-    // ------------------------------------------------------------------
     glfwTerminate();
     return 0;
 
@@ -380,17 +316,14 @@ int main()
 
 #pragma region Implementation
 
+// Tham khảo của An Việt Trung
 #pragma region Input
 
-// glfw: whenever the window size changed (by OS or user resize) this callback function executes
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
-    // make sure the viewport matches the new window dimensions; note that width and 
-    // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
 }
 
-// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 void processInput()
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -414,201 +347,164 @@ bool IsKeyUp(int key)
 
 #pragma endregion
 
-#pragma region Render
-
-void clearColor(Color& color)
-{
-    glClearColor(color.data[0], color.data[1], color.data[2], 1.0);
-}
-
-#pragma endregion
-
 #pragma region Core Game
 
 void Update()
 {
-    ProcessPlayerControl();
-    TickDown();
+    Draw(X, Y, BLOCK, quay, 0);
+    Control();
+    Fall();
+    Draw(X, Y, BLOCK, quay, 1);
 }
 
-void ProcessPlayerControl()
+void Control()
 {
-    oldTrans = cTetro.transform;
+    CopyBrick();
 
     if (IsKeyDown(GLFW_KEY_E))
-    {
-        cTetroId = (cTetroId + 1) % 7;
-        cTetro.block = &blocks[cTetroId];
-    }
+        m_BLOCK = (m_BLOCK + 1) % 2;
 
     if (IsKeyDown(GLFW_KEY_W))
-        cTetro.transform.rotation = (cTetro.transform.rotation + 1) % 4;
+        m_Y++;
 
     if (IsKeyDown(GLFW_KEY_LEFT))
-        cTetro.transform.position.x -= 1;
+        m_X--;
 
     if (IsKeyDown(GLFW_KEY_RIGHT))
-        cTetro.transform.position.x += 1;
+        m_X++;
 
     if (IsKeyDown(GLFW_KEY_DOWN))
-        cTetro.transform.position.y -= 1;
+        m_Y--;
 
     if (IsKeyDown(GLFW_KEY_UP))
-        cTetro.transform.position.y += 1;
+    {
+        m_quay++;
+        if (m_quay == 4)
+            m_quay = 0;
+    }
 
-    if (!CheckTetrominoTransform(&cTetro))
-        cTetro.transform = oldTrans;
+    if (Check(m_X, m_Y, m_BLOCK, m_quay))
+        Apply();
 }
 
-
-void TickDown()
+void InitBrick()
 {
-    while (passTickTime + tickTime < glfwGetTime())
+    BLOCK = rand() % 2;
+    X = w / 2;
+    Y = h - 1;
+    quay = 0;
+}
+
+void Fall()
+{
+    while (passTickTime + tick < glfwGetTime())
     {
-        passTickTime += tickTime;
+        passTickTime += tick;
 
-        oldTrans = cTetro.transform;
+        CopyBrick();
 
-        cTetro.transform.position.y -= 1;
+        m_Y--;
 
-        if (!CheckTetrominoTransform(&cTetro))
-        {
-            cTetro.transform = oldTrans;
-            OnLanded();
-        }
+        if (Check(m_X, m_Y, m_BLOCK, m_quay))
+            Apply();
+        else
+            StopBrick();
     }
 }
 
-void OnLanded()
+void StopBrick()
 {
-    DrawTetromino(&cTetro);
-    CheckClearTetromino();
-    cTetro.block = &blocks[dist7(rng)];
-    cTetro.transform.position = startPos;
-    cTetro.transform.rotation = 0;
+    Draw(X, Y, BLOCK, quay, 1);
+    //CheckClearTetromino();
+    InitBrick();
 }
 
-void CheckClearTetromino()
+void DeleteRow()
 {
-    int countEmpty = 0;
-    int stopLine = 0;
-    for (int y = 0; y < h; y++)
-    {
-        countEmpty = 0;
-        for (int x = 0; x < w; x++)
-            if (cell[y * w + x] == color_grey.data)
-                countEmpty++;
-        
-        if (countEmpty == w)
-        {
-            stopLine = y + 1;
-            break;
-        }
+    //int countEmpty = 0;
+    //int stopLine = 0;
+    //for (int y = 0; y < h; y++)
+    //{
+    //    countEmpty = 0;
+    //    for (int x = 0; x < w; x++)
+    //        if (cell[y * w + x] == color_grey.data)
+    //            countEmpty++;
+    //    
+    //    if (countEmpty == w)
+    //    {
+    //        stopLine = y + 1;
+    //        break;
+    //    }
 
-        if (countEmpty == 0)
-            scanLines.push_back(y);
-    }
-    
-    int sLineIndex = 0;
-    for (int y = 0; y < stopLine; y++)
-    {
-        while (sLineIndex < scanLines.size())
-        {
-            if (y + sLineIndex != scanLines[sLineIndex]) 
-                break;
-        
-            sLineIndex++;
-        }
+    //    if (countEmpty == 0)
+    //        scanLines.push_back(y);
+    //}
+    //
+    //int sLineIndex = 0;
+    //for (int y = 0; y < stopLine; y++)
+    //{
+    //    while (sLineIndex < scanLines.size())
+    //    {
+    //        if (y + sLineIndex != scanLines[sLineIndex]) 
+    //            break;
+    //    
+    //        sLineIndex++;
+    //    }
 
-        if (sLineIndex > 0)
-            for (int x = 0; x < w; x++)
-                cell[y * w + x] = cell[(y + sLineIndex) * w + x];
-    }
+    //    if (sLineIndex > 0)
+    //        for (int x = 0; x < w; x++)
+    //            cell[y * w + x] = cell[(y + sLineIndex) * w + x];
+    //}
 
-    scanLines.clear();
+    //scanLines.clear();
 }
 
 #pragma endregion
 
-#pragma region Tetromino
-
-bool CheckTetrominoTransform(Tetromino* tetro)
+bool Check(int x, int y, int block_id, int quay_id)
 {
+    int* block = blocks[block_id][quay_id];
+
     for (int i = 0; i < 4; i++)
     {
-        Vec2Int local_pos = tetro->block->data[i];
-        local_pos = ApplyRotate(local_pos, tetro->transform.rotation);
-        int px = tetro->transform.position.x + local_pos.x;
-        int py = tetro->transform.position.y + local_pos.y;
-        if (0 <= px && px < w && 0 <= py && py < h)
-        {
-            if (cell[py * w + px] != color_grey.data)
-                return false;
-        }
-        else {
-            if (px < 0 || px >= w || py < 0)
-                return false;
-        }
-    }
+        int tx = x + block[i] % 4;
+        int ty = y + block[i] / 4;
 
+        if (tx < 0 || tx >= w || ty < 0 || matrix[tx][ty] != 0)
+            return false;
+    }
     return true;
 }
 
-void ClearTetromino(Tetromino* tetro)
+void Draw(int x, int y, int block_id, int quay_id, int color_id)
 {
+    int* block = blocks[block_id][quay_id];
+
     for (int i = 0; i < 4; i++)
     {
-        Vec2Int local_pos = tetro->block->data[i];
-        local_pos = ApplyRotate(local_pos, tetro->transform.rotation);
-        int px = tetro->transform.position.x + local_pos.x;
-        int py = tetro->transform.position.y + local_pos.y;
-        if (px < 0 || px >= w || py < 0 || py >= h)
-            continue;
-        cell[py * w + px] = color_grey.data;
+        int tx = x + block[i] % 4;
+        int ty = y + block[i] / 4;
+
+        if (0 <= tx && tx < w && 0 <= ty && ty < h)
+            matrix[tx][ty] = color_id;
     }
 }
 
-void DrawTetromino(Tetromino* tetro)
+void CopyBrick()
 {
-    for (int i = 0; i < 4; i++)
-    {
-        Vec2Int local_pos = tetro->block->data[i];
-        local_pos = ApplyRotate(local_pos, tetro->transform.rotation);
-        int px = tetro->transform.position.x + local_pos.x;
-        int py = tetro->transform.position.y + local_pos.y;
-        if (px < 0 || px >= w || py < 0 || py >= h)
-            continue;
-        cell[py * w + px] = tetro->block->color->data;
-    }
+    m_BLOCK = BLOCK;
+    m_X = X;
+    m_Y = Y;
+    m_quay = quay;
 }
 
-#pragma endregion
-
-#pragma region Utilities
-
-Vec2Int ApplyRotate(Vec2Int pos, int rot)
+void Apply()
 {
-    int t = pos.x;
-    switch (rot)
-    {
-    case 1: // 90 deg
-        pos.x = pos.y;
-        pos.y = 1 - t;
-        break;
-    case 2: // 180 deg
-        pos.x = 1 - pos.x;
-        pos.y = 1 - pos.y;
-        break;
-    case 3: // 270 deg
-        pos.x = 1 - pos.y;
-        pos.y = t;
-        break;
-    }
-
-    return pos;
+    BLOCK = m_BLOCK;
+    X = m_X;
+    Y = m_Y;
+    quay = m_quay;
 }
-
-#pragma endregion
 
 #pragma endregion
 

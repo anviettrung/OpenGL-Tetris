@@ -263,7 +263,7 @@ vector<int> scanLines;
 
 #pragma endregion
 
-int main()
+int mainACB()
 {
 #pragma region Initialization
 
