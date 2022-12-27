@@ -15,3 +15,7 @@ flower.cpp
 *.o
 app
 glad.c
+x64/Debug/Flower.vcxproj.FileListAbsolute.txt
+x64/Release/Flower.tlog/CL.command.1.tlog
+x64/Release/Flower.tlog/Flower.lastbuildstate
+x64/Release/Flower.tlog/unsuccessfulbuild

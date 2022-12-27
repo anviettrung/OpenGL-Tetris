@@ -19,7 +19,7 @@ const unsigned int SCR_HEIGHT = 800;
 
 const int w = 9;
 const int h = 16;
-const double tick = 1;
+const double tick = 0.5f;
 
 #pragma endregion
 
@@ -59,16 +59,14 @@ map<int, int> track_key_state = {
 // Danh sách màu
 float color_background[] = {  87, 155, 177 };
 float color_cell_empty[] = { 225, 215, 198 };
-float color_begie[] = { 251, 194, 82 };
-float color_sage[] = { 163, 187, 152 };
+float color_cell_fill[] = { 251, 194, 82 };
 
 float* colors[] = {
     color_cell_empty,
-    color_begie,
-    color_sage
+    color_cell_fill
 };
 
-int blocks[7][4][4] = {
+int bricks[7][4][4] = {
     {
         { 2, 6, 10, 14 },
         { 8, 9, 10, 11 },
@@ -80,6 +78,36 @@ int blocks[7][4][4] = {
         { 5, 6, 9, 10 },
         { 5, 6, 9, 10 },
         { 5, 6, 9, 10 }
+    },
+    {
+        { 2, 6, 9, 10 },
+        { 5, 9, 10, 11 },
+        { 5, 6, 9, 13 },
+        { 4, 5, 6, 10 }
+    },
+    {
+        { 1, 5, 9, 10 },
+        { 5, 6, 7, 9 },
+        { 5, 6, 10, 14 },
+        { 6, 8, 9, 10 }
+    },
+    {
+        { 2, 5, 6, 9 },
+        { 5, 6, 10, 11 },
+        { 6, 9, 10, 13 },
+        { 4, 5, 9, 10 }
+    },
+    {
+        { 1, 5, 6, 9 },
+        { 5, 6, 7, 10 },
+        { 6, 9, 10, 14 },
+        { 5, 8, 9, 10 }
+    },
+    {
+        { 1, 5, 6, 10 },
+        { 6, 7, 9, 10 },
+        { 5, 9, 10, 14 },
+        { 5, 6, 8, 9 }
     }
 };
 
@@ -87,46 +115,46 @@ int blocks[7][4][4] = {
 
 #pragma region Declaration
 
-// Input
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput();
 void updateTrackKeyInput();
 bool IsKeyDown(int key);
 bool IsKeyUp(int key);
 
-// Core Game
-void Control();
-void Update();
+void Control(); // Điều khiển
+void Update();  // Cập nhật
 
-void InitBrick();
-void Fall();
-void StopBrick();
-void DeleteRow();
+void InitBrick(); // Khởi tạo ngẫu nhiên Brick mới
+void Fall(); // Rơi tự do
+void StopBrick(); // Dừng Brick khi chạm đáy
+void DeleteRow(); // Xóa hàng
 
-bool Check(int x, int y, int block_id, int quay_id);
-void Draw(int x, int y, int block_id, int quay_id, int color_id);
+bool Check(int x, int y, int block_id, int quay_id); // Kiểm tra xem brick có hợp lệ
+void Draw(int x, int y, int block_id, int quay_id, int color_id); // vẽ brick
 
-void CopyBrick();
-void Apply();
+void CopyBrick(); // Bản sao biến điều khiển copy bản gốc
+void Apply(); // Gán giá trị bản sao biến điều khiển vào bản gốc
 
 #pragma endregion
 
 #pragma region Global Variables
 
 GLFWwindow* window;
-double passTickTime = 0;
+double tick_time = 0;
 
 int matrix[w][h];
 
-int BLOCK = 0;
+// Biến điều khiển
+int BRICK = 0;
 int X = 0;
 int Y = 0;
-int quay = 0;
+int ROTATE = 0;
 
-int m_BLOCK = BLOCK;
+// Bản sao biến điều khiển
+int m_BRICK = BRICK;
 int m_X = X;
 int m_Y = Y;
-int m_quay = quay;
+int m_ROTATE = ROTATE;
 
 #pragma endregion
 
@@ -221,8 +249,6 @@ int main()
 
 #pragma endregion
 
-#pragma endregion
-
 #pragma region VAO, VBO, EBO
 
     float vertices[] = {
@@ -264,9 +290,11 @@ int main()
 
 #pragma endregion
 
+#pragma endregion
+
 #pragma region Core Loop
 
-    InitBrick();
+    InitBrick(); // Khởi tạo một khối khi bắt đầu game
 
     // Game loop
     while (!glfwWindowShouldClose(window))
@@ -280,6 +308,7 @@ int main()
         glClearColor(color_background[0] / 255, color_background[1] / 255, color_background[2] / 255, 1);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        // Render ma trận chơi
         for (int x = 0; x < w; x++)
         {
             for (int y = 0; y < h; y++)
@@ -351,18 +380,15 @@ bool IsKeyUp(int key)
 
 void Update()
 {
-    Draw(X, Y, BLOCK, quay, 0);
+    Draw(X, Y, BRICK, ROTATE, 0);
     Control();
     Fall();
-    Draw(X, Y, BLOCK, quay, 1);
+    Draw(X, Y, BRICK, ROTATE, 1);
 }
 
 void Control()
 {
     CopyBrick();
-
-    if (IsKeyDown(GLFW_KEY_E))
-        m_BLOCK = (m_BLOCK + 1) % 2;
 
     if (IsKeyDown(GLFW_KEY_W))
         m_Y++;
@@ -378,34 +404,34 @@ void Control()
 
     if (IsKeyDown(GLFW_KEY_UP))
     {
-        m_quay++;
-        if (m_quay == 4)
-            m_quay = 0;
+        m_ROTATE--;
+        if (m_ROTATE == -1)
+            m_ROTATE = 3;
     }
 
-    if (Check(m_X, m_Y, m_BLOCK, m_quay))
+    if (Check(m_X, m_Y, m_BRICK, m_ROTATE))
         Apply();
 }
 
 void InitBrick()
 {
-    BLOCK = rand() % 2;
+    BRICK = rand() % 7;
     X = w / 2;
     Y = h - 1;
-    quay = 0;
+    ROTATE = 0;
 }
 
 void Fall()
 {
-    while (passTickTime + tick < glfwGetTime())
+    while (tick_time + tick < glfwGetTime())
     {
-        passTickTime += tick;
+        tick_time += tick;
 
         CopyBrick();
 
         m_Y--;
 
-        if (Check(m_X, m_Y, m_BLOCK, m_quay))
+        if (Check(m_X, m_Y, m_BRICK, m_ROTATE))
             Apply();
         else
             StopBrick();
@@ -414,71 +440,57 @@ void Fall()
 
 void StopBrick()
 {
-    Draw(X, Y, BLOCK, quay, 1);
-    //CheckClearTetromino();
+    Draw(X, Y, BRICK, ROTATE, 1);
+    DeleteRow();
     InitBrick();
 }
 
 void DeleteRow()
 {
-    //int countEmpty = 0;
-    //int stopLine = 0;
-    //for (int y = 0; y < h; y++)
-    //{
-    //    countEmpty = 0;
-    //    for (int x = 0; x < w; x++)
-    //        if (cell[y * w + x] == color_grey.data)
-    //            countEmpty++;
-    //    
-    //    if (countEmpty == w)
-    //    {
-    //        stopLine = y + 1;
-    //        break;
-    //    }
+    int y = 0;
+    int empty = 0;
+    while (empty < w && y < h) // Hàng trống hoặc hàng trên cùng thì dừng
+    {
+        empty = 0;
+        // Đếm số ô trống
+        for (int x = 0; x < w; x++)
+            if (matrix[x][y] == 0)
+                empty++;
 
-    //    if (countEmpty == 0)
-    //        scanLines.push_back(y);
-    //}
-    //
-    //int sLineIndex = 0;
-    //for (int y = 0; y < stopLine; y++)
-    //{
-    //    while (sLineIndex < scanLines.size())
-    //    {
-    //        if (y + sLineIndex != scanLines[sLineIndex]) 
-    //            break;
-    //    
-    //        sLineIndex++;
-    //    }
-
-    //    if (sLineIndex > 0)
-    //        for (int x = 0; x < w; x++)
-    //            cell[y * w + x] = cell[(y + sLineIndex) * w + x];
-    //}
-
-    //scanLines.clear();
+        if (empty == 0) // Hàng kín thì đẩy tất cả hàng trên xuống một đơn vị
+            for (int t = y; t < h - 1; t++)
+                for (int x = 0; x < w; x++)
+                    matrix[x][t] = matrix[x][t + 1];
+        else
+            y++;
+    }
 }
-
-#pragma endregion
 
 bool Check(int x, int y, int block_id, int quay_id)
 {
-    int* block = blocks[block_id][quay_id];
+    int* block = bricks[block_id][quay_id];
 
     for (int i = 0; i < 4; i++)
     {
         int tx = x + block[i] % 4;
         int ty = y + block[i] / 4;
 
-        if (tx < 0 || tx >= w || ty < 0 || matrix[tx][ty] != 0)
-            return false;
+        if (0 <= tx && tx < w && 0 <= ty && ty < h)
+        {
+            if (matrix[tx][ty] != 0)
+                return false;
+        }
+        else {
+            if (tx < 0 || tx >= w || ty < 0)
+                return false;
+        }
     }
     return true;
 }
 
 void Draw(int x, int y, int block_id, int quay_id, int color_id)
 {
-    int* block = blocks[block_id][quay_id];
+    int* block = bricks[block_id][quay_id];
 
     for (int i = 0; i < 4; i++)
     {
@@ -492,19 +504,21 @@ void Draw(int x, int y, int block_id, int quay_id, int color_id)
 
 void CopyBrick()
 {
-    m_BLOCK = BLOCK;
+    m_BRICK = BRICK;
     m_X = X;
     m_Y = Y;
-    m_quay = quay;
+    m_ROTATE = ROTATE;
 }
 
 void Apply()
 {
-    BLOCK = m_BLOCK;
+    BRICK = m_BRICK;
     X = m_X;
     Y = m_Y;
-    quay = m_quay;
+    ROTATE = m_ROTATE;
 }
+
+#pragma endregion
 
 #pragma endregion
 
