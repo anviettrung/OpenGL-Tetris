@@ -1,4 +1,5 @@
 #pragma region Includes
+#include <random>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
@@ -7,7 +8,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <map>
 #include <vector>
-#include <random>
 
 using namespace std;
 using namespace glm;
@@ -22,7 +22,8 @@ const unsigned int SCR_HEIGHT = 800;
 const int w = 9;
 const int h = 16;
 const int totalCell = w * h;
-const double tickTime = 1;
+vec3 cameraPos = vec3(4.5f, 8, 0);
+const double tickTime = 0.25f;
 
 #pragma region Random
 
@@ -34,7 +35,6 @@ uniform_int_distribution<std::mt19937::result_type> dist7(0, 7);
 
 #pragma endregion
 
-// Tham khảo của Trung
 #pragma region Shader
 
 const char* vertexShaderSource = "#version 330 core\n"
@@ -58,7 +58,87 @@ const char* fragmentShaderSource = "#version 330 core\n"
 
 #pragma endregion
 
+#pragma region Data Stucture
+
+struct Vec2Int {
+    int x, y;
+    Vec2Int(int _x, int _y) : x(_x), y(_y) {}
+    Vec2Int() : x(0), y(0) {}
+};
+
+struct Transform {
+    Vec2Int position;
+    int rotation;
+
+    Transform(Vec2Int pos, int rot) : position(pos), rotation(rot) {}
+    Transform() : position(Vec2Int()), rotation(0) {}
+};
+
+struct Color { 
+    float data[3];
+
+    Color(float r, float g, float b) 
+    {
+        data[0] = r;
+        data[1] = g;
+        data[2] = b;
+    }
+
+    Color() {
+        for (int i = 0; i < 3; i++)
+            data[i] = 0;
+    }
+};
+
+struct Block {
+    Vec2Int data[4];
+    Color* color;
+    
+    Block(Vec2Int p[4], Color* c)
+    {
+        for (int i = 0; i < 4; i++)
+            data[i] = p[i];
+        color = c;
+    }
+
+    Block(int p[8], Color* c)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            data[i].x = p[2 * i];
+            data[i].y = p[2 * i + 1];
+        }
+        color = c;
+    }
+};
+
+struct Tetromino {
+    Transform transform;
+    Block* block;
+
+    Tetromino(Transform trans, Block* b) {
+        transform = trans;
+        block = b;
+    }
+};
+
+#pragma endregion
+
 #pragma region Asset
+
+unsigned int VBO, VAO, EBO;
+
+float mesh_vertex_square[] = {
+    -0.5f,  0.5f, 0.0f, // top left
+    -0.5f, -0.5f, 0.0f, // bot left
+     0.5f, -0.5f, 0.0f, // bot right
+     0.5f,  0.5f, 0.0f  // top right
+};
+
+unsigned int mesh_index_square[] = {
+    0, 1, 2,
+    0, 2, 3
+};
 
 Color color_black = Color(0, 0, 0);
 Color color_white = Color(255, 255, 255);
@@ -172,7 +252,7 @@ Vec2Int ApplyRotate(Vec2Int pos, int rot);
 GLFWwindow* window;
 double passTickTime = 0;
 const Vec2Int startPos = Vec2Int(w / 2, h);
-int matrix[w][h];
+float* matrix[totalCell];
 int cTetroId = 3;
 Transform oldTrans;
 Tetromino cTetro = Tetromino(
@@ -274,41 +354,9 @@ int main()
 
 #pragma endregion
 
-#pragma endregion
+#pragma region Binding
 
-#pragma region VAO, VBO, EBO
-
-    float vertices[] = {
-        -0.5f,  0.5f, 0.0f,
-        -0.5f, -0.5f, 0.0f,
-         0.5f, -0.5f, 0.0f,
-         0.5f,  0.5f, 0.0f
-    };
-
-    unsigned int indices[] = {
-        0, 1, 2,
-        0, 2, 3
-    };
-
-    unsigned int VBO, VAO, EBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
-
-    glBindVertexArray(VAO);
-
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-    // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
+    binding(mesh_vertex_square, mesh_index_square);
     glBindVertexArray(VAO);
     glUseProgram(shaderProgram);
 
@@ -317,6 +365,8 @@ int main()
 
     for (int i = 0; i < totalCell; i++)
         matrix[i] = color_grey.data;
+
+#pragma endregion
 
 #pragma endregion
 
@@ -339,6 +389,16 @@ int main()
         clearColor(color_white);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        // Border
+        {
+            mat4 trans = mat4(1.0f);
+            trans = scale(trans, 0.12f * vec3(w, h, 1));
+            trans = translate(trans, vec3(w / 2, h / 2, 0) - cameraPos + vec3(0.49f, 0.015f, 0.0f));
+            glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
+            glUniform3fv(colorLoc, 1, color_dgrey.data);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        }
+
         // Cells
         for (int i = 0; i < totalCell; i++)
         {
@@ -347,7 +407,7 @@ int main()
 
             mat4 trans = mat4(1.0f);
             trans = scale(trans, vec3(1.0f) * 0.1f);
-            trans = translate(trans, 1.1f * vec3(pos_x, pos_y, 0) - vec3(4.5, 8, 0));
+            trans = translate(trans, 1.1f * vec3(pos_x, pos_y, 0) - cameraPos);
 
             glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
             glUniform3fv(colorLoc, 1, matrix[i]);
@@ -415,6 +475,29 @@ bool IsKeyUp(int key)
 #pragma endregion
 
 #pragma region Render
+
+template <size_t n_vert, size_t n_index>
+void binding(float(&vertices)[n_vert], unsigned int(&indices)[n_index])
+{
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
+
+    glBindVertexArray(VAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * n_vert, vertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * n_index, indices, GL_STATIC_DRAW);
+
+    // position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
 
 void clearColor(Color& color)
 {
@@ -496,7 +579,7 @@ void CheckClearTetromino()
     {
         countEmpty = 0;
         for (int x = 0; x < w; x++)
-            if (cell[y * w + x] == color_grey.data)
+            if (matrix[y * w + x] == color_grey.data)
                 countEmpty++;
         
         if (countEmpty == w)
@@ -522,7 +605,7 @@ void CheckClearTetromino()
 
         if (sLineIndex > 0)
             for (int x = 0; x < w; x++)
-                cell[y * w + x] = cell[(y + sLineIndex) * w + x];
+                matrix[y * w + x] = matrix[(y + sLineIndex) * w + x];
     }
 
     scanLines.clear();
@@ -542,7 +625,7 @@ bool CheckTetrominoTransform(Tetromino* tetro)
         int py = tetro->transform.position.y + local_pos.y;
         if (0 <= px && px < w && 0 <= py && py < h)
         {
-            if (cell[py * w + px] != color_grey.data)
+            if (matrix[py * w + px] != color_grey.data)
                 return false;
         }
         else {
@@ -564,7 +647,7 @@ void ClearTetromino(Tetromino* tetro)
         int py = tetro->transform.position.y + local_pos.y;
         if (px < 0 || px >= w || py < 0 || py >= h)
             continue;
-        cell[py * w + px] = color_grey.data;
+        matrix[py * w + px] = color_grey.data;
     }
 }
 
@@ -578,7 +661,7 @@ void DrawTetromino(Tetromino* tetro)
         int py = tetro->transform.position.y + local_pos.y;
         if (px < 0 || px >= w || py < 0 || py >= h)
             continue;
-        cell[py * w + px] = tetro->block->color->data;
+        matrix[py * w + px] = tetro->block->color->data;
     }
 }
 
